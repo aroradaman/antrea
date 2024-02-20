@@ -230,17 +230,17 @@ func TestVLANNetwork(t *testing.T) {
 		{
 			podName:           "vlan-pod1",
 			nodeName:          node1,
-			interfaceNetworks: map[string]string{"eth1": "vlan-net1", "eth2": "vlan-net2"},
+			interfaceNetworks: map[string]string{"eth1": "vlan-net1", "eth2": "vlan-net2", "eth3": "vlan-net3"},
 		},
 		{
 			podName:           "vlan-pod2",
 			nodeName:          node1,
-			interfaceNetworks: map[string]string{"eth1": "vlan-net1", "eth2": "vlan-net3"},
+			interfaceNetworks: map[string]string{"eth2": "vlan-net2", "eth3": "vlan-net3"},
 		},
 		{
 			podName:           "vlan-pod3",
 			nodeName:          node2,
-			interfaceNetworks: map[string]string{"eth1": "vlan-net2"},
+			interfaceNetworks: map[string]string{"eth1": "vlan-net1", "eth3": "vlan-net3"},
 		},
 	}
 	testSecondaryNetwork(t, networkTypeVLAN, pods)

@@ -40,7 +40,7 @@ ANTREA_CHART="$THIS_DIR/../../build/charts/antrea"
 TIMEOUT="5m"
 # Antrea is deployed by this script. Do not deploy it again in the test.
 TEST_OPTIONS="--logs-export-dir=$ANTREA_LOG_DIR --deploy-antrea=false"
-EXTRA_NETWORK="20.20.20.0/24"
+EXTRA_NETWORK="20.20.20.0/24 30.30.30.0/24 40.40.40.0/24 50.50.50.0/24"
 
 setup_only=false
 cleanup_only=false
@@ -108,13 +108,24 @@ function run_test {
   # network.
   helm install antrea $ANTREA_CHART --namespace kube-system \
      --set featureGates.SecondaryNetwork=true,featureGates.AntreaIPAM=true \
-     --set-json secondaryNetwork.ovsBridges='[{"bridgeName": "br-secondary", "physicalInterfaces": ["eth1"]}]'
+     --set-json secondaryNetwork.ovsBridges='[{"bridgeName": "br-secondary", "physicalInterfaces": ["eth1", "eth2", "eth3", "eth4"]}]'
 
   # Wait for antrea-controller start to make sure the IPPool validation webhook is ready.
   kubectl rollout status --timeout=1m deployment.apps/antrea-controller -n kube-system
   kubectl apply -f $ATTACHMENT_DEFINITION_YAML
   kubectl apply -f $SECONDARY_NETWORKS_YAML
 
+  kubectl wait --for=condition=ready pod -n kube-system -l component=antrea-agent
+  for pod in $(kubectl get pods -n kube-system -l component=antrea-agent -o=jsonpath='{.items[*].metadata.name}'); do
+    i=1
+    for network in $(echo $EXTRA_NETWORK); do
+      if [[ $i != 1 ]]; then
+        kubectl exec $pod -c antrea-ovs -n kube-system -- ovs-vsctl set port eth$i tag=$((i*10))
+      fi
+      i=$((i+1))
+    done
+    kubectl exec $pod -c antrea-ovs -n kube-system -- ovs-vsctl show
+  done
   go test -v -timeout=$TIMEOUT antrea.io/antrea/test/e2e-secondary-network -run=TestVLANNetwork -provider=kind $TEST_OPTIONS
 }
 

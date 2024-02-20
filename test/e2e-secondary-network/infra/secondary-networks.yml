@@ -107,7 +107,6 @@ spec:
       "type": "antrea",
       "networkType": "vlan",
       "mtu": 1200,
-      "vlan": 100,
       "ipam": {
         "type": "antrea",
         "ippools": ["secnet-ipv4-1"]
@@ -124,6 +123,7 @@ spec:
       "cniVersion": "0.3.0",
       "type": "antrea",
       "networkType": "vlan",
+      "vlan": 20,
       "ipam": {
         "type": "antrea",
         "ippools": ["secnet-ipv4-2"]
@@ -140,6 +140,7 @@ spec:
       "cniVersion": "0.3.0",
       "type": "antrea",
       "networkType": "vlan",
+      "vlan": 30,
       "ipam": {
         "type": "antrea",
         "ippools": ["secnet-ipv4-3", "secnet-ipv6-3"]

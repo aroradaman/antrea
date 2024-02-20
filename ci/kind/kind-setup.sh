@@ -229,15 +229,34 @@ function configure_extra_networks {
     network=antrea-$i
     echo "creating network $network with $s"
     docker network create -d bridge --subnet $s $network >/dev/null 2>&1
+    bridge_id=$(docker network inspect --format {{.Id}} $network)
+    bridge_interface="br-${bridge_id:0:12}"
+
+    if [[ $i != 1 ]]; then
+      echo "enabling vlan filtering on bridge $bridge_interface $network"
+      sudo ip link set $bridge_interface type bridge vlan_filtering 1
+    fi
     networks+=($network)
     i=$((i+1))
   done
 
-  nodes="$(kind get nodes --name $CLUSTER_NAME)"
-  for node in $nodes; do
-    for network in $networks; do
+  for node in $(kind get nodes --name $CLUSTER_NAME); do
+    for network in ${networks[@]}; do
       docker network connect $network $node >/dev/null 2>&1
       echo "connected worker $node to network $network"
+    done
+  done
+
+  for node in $(kind get nodes --name $CLUSTER_NAME); do
+    i=1
+    for network in ${networks[@]}; do
+      index=$(docker exec -t $node cat /sys/class/net/eth$i/iflink | tr -d '\r\n\t')
+      veth=$(grep -lr $index /sys/class/net/*/ifindex | sed 's|/sys/class/net/\(.*\)/ifindex|\1|')
+      echo "tagging $veth with vid $((i*10))"
+      if [[ $i != 1 ]]; then
+        sudo bridge vlan add dev $veth vid $((i*10))
+      fi
+      i=$((i+1))
     done
   done
 }
