@@ -102,13 +102,47 @@ function setup_cluster {
   eval "timeout 600 $TESTBED_CMD create kind $args"
 }
 
+function add_ap_interface {
+  node=$1
+  echo "patching node ${node}"
+  # capture containerID
+  containerID=$(docker exec -t $node crictl ps |grep antrea-ovs |awk '{print $1}')
+  # capture the ip of eth0 interface
+  primaryIP=$(docker exec -t $node crictl exec -it $containerID ip addr show eth0 |grep -Po 'inet \K[\d.]+')
+  # capture gateway ip
+  gatewayIP=$(docker exec -t $node crictl exec -it $containerID ip route | grep default |grep -Po '\K[\d.]+'|head -n 1)
+  # delete the ip from eth0 interface
+  docker exec -t $node crictl exec -it $containerID ip addr del ${primaryIP}/16 dev eth0
+  # add access port to br-secondary
+  docker exec -t $node crictl exec -it $containerID ovs-vsctl add-port br-secondary ap0 -- set Interface ap0 type=internal
+  # add primary ip to ap0
+  docker exec -t $node crictl exec -it $containerID ip addr add ${primaryIP}/16 dev ap0
+  # make ap0 active
+  docker exec -t $node crictl exec -it $containerID ip link set dev ap0 up
+  # add default route
+  docker exec -t $node crictl exec -it $containerID ip route add default via $gatewayIP dev ap0
+}
+
 function run_test {
   echo "deploying Antrea to the kind cluster"
   # Create a secondary OVS bridge with the Node's physical interface on the extra
   # network.
   helm install antrea $ANTREA_CHART --namespace kube-system \
      --set featureGates.SecondaryNetwork=true,featureGates.AntreaIPAM=true \
-     --set-json secondaryNetwork.ovsBridges='[{"bridgeName": "br-secondary", "physicalInterfaces": ["eth1"]}]'
+     --set-json secondaryNetwork.ovsBridges='[{"bridgeName": "br-secondary", "physicalInterfaces": ["eth0"]}]'
+
+  # wait for pods to come up
+  sleep 15
+  # patch control plane nodes
+  for node in $(kind get nodes |grep control-plane); do
+    add_ap_interface $node
+  done;
+
+  sleep 15
+  # patch worker nodes
+  for node in $(kind get nodes |grep worker); do
+    add_ap_interface $node
+  done;
 
   # Wait for antrea-controller start to make sure the IPPool validation webhook is ready.
   kubectl rollout status --timeout=1m deployment.apps/antrea-controller -n kube-system
